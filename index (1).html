@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Зеленко ПП">
+<title>Зеленко – Протоколи</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1a0d;font-family:Georgia,serif;color:#e8f0e8;min-height:100vh}
+@media print{
+  #form{display:none!important}
+  #preview{display:block!important}
+  .noprint{display:none!important}
+}
+@media screen{#preview{display:none}}
+
+#form{max-width:900px;margin:0 auto;padding:12px 10px}
+.card{background:#111e11;border:1px solid #2a4a1a;border-radius:12px;padding:16px 14px}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a4a1a}
+.logo{font-size:22px;font-weight:900;color:#f5e800}
+.logo span{color:#7dc820;font-size:13px;margin-left:4px}
+.htitle{font-size:16px;font-weight:bold;color:#f5e800}
+.sec-title{font-size:10px;color:#7dc820;text-transform:uppercase;letter-spacing:1px;font-weight:bold;margin-bottom:8px}
+input[type=text],input[type=number]{background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:7px 10px;font-size:14px;outline:none;width:100%}
+input:focus{border-color:#7dc820}
+
+/* CLIENT BUTTONS */
+.clients{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.cbtn{background:#1a3a0a;border:1px solid #3a6a2a;color:#aad080;border-radius:18px;padding:6px 14px;font-size:13px;cursor:pointer;transition:all .15s}
+.cbtn.active{background:#4a7c20;border-color:#7dc820;color:#fff;font-weight:bold}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.field{flex:2;min-width:130px}
+.field.sm{flex:0 0 130px}
+
+/* GROUPS */
+.group{margin-bottom:14px}
+.glabel{font-size:11px;color:#aad080;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #1a3a0a}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:5px}
+.item{display:flex;align-items:center;gap:6px;background:#0d180d;border:1px solid #1e3a1e;border-radius:8px;padding:6px 8px;transition:all .1s}
+.item.active{background:#1a3a0a;border-color:#4a7c20}
+.iname{font-size:12px;color:#8ab070;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.item.active .iname{color:#fff;font-weight:bold}
+.iprice{font-size:10px;color:#5a7a3a}
+.isum{font-size:11px;color:#7dc820;min-width:38px;text-align:right}
+.qty{width:55px;background:#0a140a;border:1px solid #2a4a2a;border-radius:6px;color:#668844;padding:5px 4px;font-size:15px;text-align:center;outline:none;font-weight:bold}
+.item.active .qty{border-color:#7dc820;color:#f5e800;background:#0d2a0d}
+
+/* SUMMARY */
+.summary{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0d2a0d;border-radius:8px;border:1px solid #2a5a2a;margin-bottom:12px}
+.sinfo{font-size:13px;color:#aaa}
+.stotal{font-size:22px;font-weight:bold;color:#f5e800}
+.genbtn{width:100%;background:#4a7c20;color:#fff;border:none;border-radius:8px;padding:13px;font-size:15px;font-weight:bold;cursor:pointer}
+.genbtn:disabled{opacity:.35;cursor:not-allowed}
+
+/* PREVIEW */
+#preview{max-width:820px;margin:0 auto;padding:20px;background:#fff;color:#000;font-family:Arial,sans-serif;font-size:12px}
+#preview table{width:100%;border-collapse:collapse;margin-bottom:12px}
+#preview td,#preview th{border:1px solid #000;padding:4px 6px}
+#preview th{background:#D9E1F2;font-weight:bold}
+#preview .tot{background:#D9E1F2;font-weight:bold}
+#preview .rem{border:1px solid #000;min-height:55px;margin-bottom:12px;padding:4px 6px}
+#preview .remlbl{font-weight:bold;border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:4px}
+#preview .final{text-align:right;font-weight:bold;font-size:16px;color:#1a5a1a;margin:14px 0 10px}
+.btnrow{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.btnback{background:transparent;border:1px solid #3a7a1a;color:#3a7a1a;border-radius:7px;padding:9px 18px;font-size:13px;cursor:pointer}
+.btnprint{background:#4a7c20;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:bold;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="form">
+<div class="card">
+  <div class="hdr">
+    <div><span class="logo">Zelenko<span>greenhouse</span></span></div>
+    <div class="htitle">Генератор на протоколи</div>
+  </div>
+
+  <!-- CLIENTS -->
+  <div style="margin-bottom:14px">
+    <div class="sec-title">👤 Клиент</div>
+    <div class="clients" id="clientBtns"></div>
+    <div class="row">
+      <div class="field"><input type="text" id="client" placeholder="Клиент..."></div>
+      <div class="field"><input type="text" id="address" placeholder="Адрес..."></div>
+      <div class="field sm"><input type="text" id="docdate" placeholder="дд.мм.гггг"></div>
+    </div>
+  </div>
+
+  <!-- ITEMS -->
+  <div class="sec-title">🌸 Въведи бройки — Enter за следващ</div>
+  <div id="groups"></div>
+
+  <!-- SUMMARY -->
+  <div class="summary">
+    <div class="sinfo" id="sinfo">Все още няма въведени бройки</div>
+    <div class="stotal" id="stotal">0.00 EUR</div>
+  </div>
+  <button class="genbtn" id="genbtn" onclick="generate()" disabled>📄 Генерирай протокол</button>
+</div>
+</div>
+
+<div id="preview"></div>
+
+<script>
+const CLIENTS=[
+  {n:"Талина",a:"гр. Костинброд"},
+  {n:"Ани",a:"гр. Радомир"},
+  {n:"Гарденфлора",a:"с. Драгановци"},
+  {n:"Марин",a:"гр. Плевен"},
+  {n:"Христо",a:"гр. Ловеч"},
+  {n:"Анета",a:"с. Дебелец"},
+  {n:"Мариана",a:"гр. Стражица"},
+];
+
+const GROUPS=[
+  {l:"🌸 Мушкато & Сакъз",items:[
+    ["мушкато","Пеларгониум зонале (мушкато) ф12",1.55],
+    ["селектирани","Пеларгониум зонале Селектирани сортове ф12",2.00],
+    ["калиопе","Пеларгониум зонале Калиопе (мушкато - каскадно) ф12",2.00],
+    ["сакъз","Пеларгониум пелтатум (Сакъз) ф10.5",1.55],
+    ["алп.сакъз","Алпийски сакъз ф10.5",1.55],
+  ]},
+  {l:"🌼 Петуния & Вербена",items:[
+    ["петуния борд.","Петуния (бордюрна) ф9",0.41],
+    ["петуния каск.","Петуния (каскадна) ф10.5",1.00],
+    ["сурфина","Петуния (Сурфина - каскадна) ф10.5",1.03],
+    ["вербена борд.","Вербена (бордюрна) ф9",0.41],
+    ["вербена каск.","Вербена (каскадна) ф10.5",1.00],
+  ]},
+  {l:"🌺 Летни цветя",items:[
+    ["тагетис","Тагетис ф9",0.46],
+    ["бегония","Бегония (бордюрна) ф9",0.41],
+    ["циганче","Импатиенс (циганче) ф9",0.41],
+    ["далия","Далия ф10.5",1.55],
+    ["остео","Остеоспермум ф10.5",1.28],
+    ["карамфил","Карамфил ф10.5",1.55],
+    ["газания","Газания ф9",0.52],
+    ["агератум","Агератум (Морска пяна) ф9",0.41],
+    ["калибрахое","Калибрахое ф10.5",1.00],
+    ["биденс","Биденс ф10",1.00],
+    ["санвиталия","Санвиталия ф10.5",1.03],
+  ]},
+  {l:"🍃 Каскадни & Специални",items:[
+    ["сънпатиенс","Нова Гвинея (Сънпатиенс) ф12",1.44],
+    ["нова гвинея","Нова Гвинея ф12",1.28],
+    ["дихондра","Дихондра ф10.5",1.28],
+    ["лавандула","Лавандула ф10.5",1.55],
+    ["лобелия","Лобелия ф9",0.66],
+    ["калоцефалус","Калоцефалус ф10.5",1.55],
+    ["ипомеа","Ипомеа Батата ф10.5",1.28],
+    ["винка","Катарантус (Винка) ф9",0.46],
+    ["каск.винка","Катарантус (Каскадна Винка) ф9",1.00],
+    ["портулака","Портулака (калдъръмче) ф9",0.41],
+    ["каск.калдър.","Каскадно калдъръмче (Портулака каскадна)",1.53],
+  ]},
+  {l:"🥦 Зеленчуци",items:[
+    ["домат","Домат",0.40],
+    ["пипер","Пипер",0.40],
+    ["патладжан","Патладжан",0.40],
+    ["тиква","Тиква",0.40],
+  ]},
+  {l:"🌿 Други",items:[
+    ["салвия","Салвия ф9",0.41],
+    ["алисум","Алисум ф9",0.46],
+    ["мимулус","Мимулус ф9",0.41],
+    ["колеус","Колеус (Копривка) ф9",0.41],
+    ["пентас","Пентас ф9",0.93],
+    ["цинерария","Цинерария ф9",0.77],
+    ["циния","Циния ф9",0.77],
+    ["целозия","Целозия",0.43],
+    ["ранункулос","Ранункулос",0.77],
+    ["канна","Канна ф12",1.80],
+    ["кошница","Кошница с микс цветя",6.50],
+  ]},
+];
+
+const ALL=GROUPS.flatMap(g=>g.items);
+const qtys={};
+const inputMap={};
+
+const fmt=n=>Number(n).toFixed(2);
+const today=()=>{const d=new Date();return`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`};
+document.getElementById('docdate').value=today();
+
+// Build client buttons
+const cb=document.getElementById('clientBtns');
+CLIENTS.forEach(c=>{
+  const b=document.createElement('button');
+  b.className='cbtn';b.textContent=`${c.n} (${c.a})`;
+  b.onclick=()=>{
+    document.getElementById('client').value=c.n;
+    document.getElementById('address').value=c.a;
+    document.querySelectorAll('.cbtn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    updateSummary();
+  };
+  cb.appendChild(b);
+});
+
+// Build groups
+const gc=document.getElementById('groups');
+GROUPS.forEach(g=>{
+  const div=document.createElement('div');div.className='group';
+  div.innerHTML=`<div class="glabel">${g.l}</div>`;
+  const grid=document.createElement('div');grid.className='grid';
+  g.items.forEach(([key,name,price])=>{
+    const el=document.createElement('div');el.className='item';el.id='item_'+key;
+    el.innerHTML=`<div style="flex:1;min-width:0"><div class="iname" title="${name}">${key}</div><div class="iprice">${fmt(price)} EUR</div></div><input class="qty" type="number" min="0" placeholder="0" id="qty_${key}"><div class="isum" id="sum_${key}"></div>`;
+    grid.appendChild(el);
+    inputMap[key]=el.querySelector('input');
+  });
+  div.appendChild(grid);gc.appendChild(div);
+});
+
+// Wire inputs
+ALL.forEach(([key,,price],idx)=>{
+  const inp=document.getElementById('qty_'+key);
+  inp.addEventListener('input',()=>{
+    const q=parseInt(inp.value)||0;
+    const el=document.getElementById('item_'+key);
+    const s=document.getElementById('sum_'+key);
+    el.classList.toggle('active',q>0);
+    s.textContent=q>0?fmt(q*price):'';
+    updateSummary();
+  });
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key==='Tab'){
+      e.preventDefault();
+      const next=ALL[idx+1];
+      if(next)document.getElementById('qty_'+next[0]).focus();
+    }
+  });
+});
+
+function updateSummary(){
+  const entries=ALL.map(([k,n,p])=>({k,n,p,q:parseInt(document.getElementById('qty_'+k).value)||0})).filter(e=>e.q>0);
+  const tq=entries.reduce((a,e)=>a+e.q,0);
+  const ts=entries.reduce((a,e)=>a+e.q*e.p,0);
+  const cl=document.getElementById('client').value.trim();
+  const ad=document.getElementById('address').value.trim();
+  document.getElementById('sinfo').innerHTML=entries.length?`Артикули: <b>${entries.length}</b> &nbsp;|&nbsp; Бройки: <b>${tq}</b>`:'Все още няма въведени бройки';
+  document.getElementById('stotal').textContent=fmt(ts)+' EUR';
+  document.getElementById('genbtn').disabled=!cl||!ad||!entries.length;
+}
+
+document.getElementById('client').addEventListener('input',updateSummary);
+document.getElementById('address').addEventListener('input',updateSummary);
+
+function generate(){
+  const client=document.getElementById('client').value.trim();
+  const address=document.getElementById('address').value.trim();
+  const date=document.getElementById('docdate').value.trim();
+  const entries=ALL.map(([k,n,p])=>({k,n,p,q:parseInt(document.getElementById('qty_'+k).value)||0})).filter(e=>e.q>0);
+  const tq=entries.reduce((a,e)=>a+e.q,0);
+  const ts=entries.reduce((a,e)=>a+e.q*e.p,0);
+
+  const rows=entries.map((e,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${e.n}</td><td style="text-align:center">${e.q}</td><td style="text-align:right">${fmt(e.p)}</td><td style="text-align:right">${fmt(e.q*e.p)}</td></tr>`).join('');
+
+  document.getElementById('preview').innerHTML=`
+    <div style="margin-bottom:10px"><span style="font-weight:900;font-size:26px;color:#ccbb00">Zelenko</span><span style="font-weight:700;font-size:14px;color:#5a9e1a;margin-left:4px">greenhouse</span></div>
+    <div style="text-align:center;font-weight:bold;font-size:15px;margin-bottom:3px">ПРИЕМНО-ПРЕДАВАТЕЛЕН ПРОТОКОЛ</div>
+    <div style="text-align:center;font-size:11px;margin-bottom:14px">за продажба на цветя и декоративни растения</div>
+    <table><tr><td style="width:56%;font-weight:bold">Предава: БИЗНЕС ГРУП-11 ЕООД</td><td style="font-weight:bold">Дата: ${date}</td></tr>
+    <tr><td>гр. Павликени, ул. Христо Смирненски 24</td><td>Тип клиент: Частен клиент</td></tr>
+    <tr><td>МОЛ: Радослав Христов &nbsp;|&nbsp; ЕИК: BG201561045</td><td>Получава: ${client}</td></tr>
+    <tr><td></td><td>Адрес: ${address}</td></tr></table>
+    <table><thead><tr style="background:#D9E1F2"><th>№</th><th>Артикул</th><th>Бр.</th><th>Ед. цена (EUR)</th><th>Сума (EUR)</th></tr></thead>
+    <tbody>${rows}<tr class="tot"><td colspan="2"><b>ОБЩО:</b></td><td style="text-align:center"><b>${tq}</b></td><td></td><td style="text-align:right"><b>${fmt(ts)}</b></td></tr></tbody></table>
+    <div class="rem"><div class="remlbl">Забележки:</div></div>
+    <table><tr><td style="width:50%;font-weight:bold">Предал:</td><td style="font-weight:bold">Получил:</td></tr>
+    <tr><td style="text-align:center;padding-bottom:22px">(подпис и печат)</td><td style="text-align:center;padding-bottom:22px">(подпис)</td></tr></table>
+    <div class="final">Обща сума: ${fmt(ts)} EUR</div>
+    <div class="btnrow noprint">
+      <button class="btnback" onclick="goBack()">← Нов протокол</button>
+      <button class="btnprint" onclick="window.print()">🖨 Принтирай / PDF</button>
+    </div>`;
+
+  document.getElementById('form').style.display='none';
+  document.getElementById('preview').style.display='block';
+}
+
+function goBack(){
+  document.getElementById('form').style.display='block';
+  document.getElementById('preview').style.display='none';
+}
+</script>
+</body>
+</html>
