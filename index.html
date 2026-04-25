@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Зеленко – Генератор на протоколи</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1a0d; font-family: Georgia, serif; color: #e8f0e8; min-height: 100vh; }
+
+  @media print {
+    body { background: #fff; }
+    #app-form { display: none !important; }
+    #preview { display: block !important; }
+    .no-print { display: none !important; }
+  }
+  @media screen {
+    #preview { display: none; }
+  }
+
+  /* ===== FORM ===== */
+  #app-form { max-width: 860px; margin: 0 auto; padding: 20px 16px; }
+
+  .card { background: #111e11; border: 1px solid #2a4a1a; border-radius: 12px; padding: 24px; }
+
+  .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #2a4a1a; }
+  .logo { font-size: 22px; font-weight: 900; }
+  .logo span.y { color: #f5e800; }
+  .logo span.g { color: #7dc820; font-size: 14px; }
+  .header-title { font-size: 20px; font-weight: bold; color: #f5e800; letter-spacing: 1px; }
+
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 11px; font-weight: bold; color: #7dc820; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: #7dc820; text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type=text], input[type=date] {
+    background: #0d1a0d; border: 1px solid #3a6a2a; border-radius: 6px;
+    color: #e8f0e8; padding: 8px 10px; font-size: 14px; outline: none; width: 100%;
+  }
+  input[type=text]:focus, input[type=date]:focus { border-color: #7dc820; }
+
+  .search-wrap { position: relative; }
+  #search { width: 100%; }
+  #dropdown {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #1a2e1a; border: 1px solid #3a6a2a; border-radius: 0 0 8px 8px;
+    z-index: 100; max-height: 260px; overflow-y: auto; display: none;
+  }
+  .drop-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #2a4a1a;
+  }
+  .drop-item:hover { background: #2d4a1e; }
+  .drop-price { color: #7dc820; font-size: 12px; white-space: nowrap; margin-left: 8px; }
+
+  table.items-tbl { width: 100%; border-collapse: collapse; }
+  table.items-tbl thead tr { background: #1a3a0a; }
+  table.items-tbl th { padding: 8px 10px; text-align: left; font-size: 11px; color: #7dc820; text-transform: uppercase; }
+  table.items-tbl td { padding: 7px 10px; font-size: 13px; border-bottom: 1px solid #2a4a1a; }
+
+  input.qty {
+    width: 75px; background: #0d1a0d; border: 1px solid #3a6a2a; border-radius: 4px;
+    color: #f5e800; padding: 4px 8px; font-size: 14px; text-align: center; outline: none;
+  }
+  input.qty:focus { border-color: #7dc820; }
+  .remove-btn {
+    background: transparent; border: 1px solid #5a2a2a; color: #cc4444;
+    border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 12px;
+  }
+  .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a4a1a; font-size: 14px; color: #aaa; }
+  .total-sum { font-size: 22px; font-weight: bold; color: #f5e800; }
+
+  .btn-primary {
+    background: #4a7c20; color: #fff; border: none; border-radius: 8px;
+    padding: 12px 24px; font-size: 15px; font-weight: bold; cursor: pointer;
+    letter-spacing: 0.5px; width: 100%; margin-top: 8px;
+  }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary:hover:not(:disabled) { background: #5a9c28; }
+
+  /* ===== PREVIEW / PRINT ===== */
+  #preview {
+    max-width: 820px; margin: 0 auto; padding: 20px;
+    background: #fff; color: #000; font-family: Arial, sans-serif; font-size: 12px;
+  }
+  #preview .doc-logo img { height: 52px; margin-bottom: 10px; }
+  #preview .doc-title { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 3px; }
+  #preview .doc-sub { text-align: center; font-size: 11px; margin-bottom: 14px; }
+  #preview table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  #preview td, #preview th { border: 1px solid #000; padding: 4px 6px; }
+  #preview th { background: #D9E1F2; font-weight: bold; }
+  #preview .total-bg { background: #D9E1F2; font-weight: bold; }
+  #preview .remark-box { border: 1px solid #000; min-height: 55px; margin-bottom: 12px; padding: 4px 6px; }
+  #preview .remark-label { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 3px; }
+  #preview .summary { text-align: right; font-size: 16px; font-weight: bold; margin: 14px 0 8px; color: #1a5a1a; }
+  #preview .btn-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px; }
+  #preview .btn-back { background: transparent; color: #3a7a1a; border: 1px solid #3a7a1a; border-radius: 8px; padding: 9px 18px; font-size: 13px; cursor: pointer; }
+  #preview .btn-print { background: #4a7c20; color: #fff; border: none; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- ===== FORM ===== -->
+<div id="app-form">
+  <div class="card">
+    <div class="header">
+      <div class="logo">
+        <span class="y">Zelenko</span><span class="g"> greenhouse</span>
+      </div>
+      <div class="header-title">Генератор на протоколи</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📋 Данни на клиента</div>
+      <div class="row">
+        <div class="field"><label>Получава (клиент)</label><input type="text" id="client" placeholder="Име на клиента..."></div>
+        <div class="field"><label>Адрес / Град</label><input type="text" id="address" placeholder="гр. / с. ..."></div>
+        <div class="field" style="flex:0 0 150px"><label>Дата</label><input type="text" id="docdate" placeholder="дд.мм.гггг"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🌸 Добави артикули</div>
+      <div class="search-wrap">
+        <input type="text" id="search" placeholder="Търси артикул... (напр. мушкато, сакъз, тагетис)" autocomplete="off" oninput="filterDropdown()">
+        <div id="dropdown"></div>
+      </div>
+    </div>
+
+    <div class="section" id="items-section" style="display:none">
+      <div class="section-title">✅ Избрани артикули</div>
+      <table class="items-tbl">
+        <thead><tr>
+          <th>Артикул</th><th>Ед. цена</th><th style="width:90px">Брой</th><th style="width:90px">Сума</th><th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="items-body"></tbody>
+      </table>
+      <div class="total-row">
+        <span id="total-info">Общо: 0 бр.</span>
+        <span class="total-sum" id="total-sum-display">0.00 EUR</span>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="gen-btn" onclick="generatePreview()" disabled>📄 Генерирай протокол</button>
+  </div>
+</div>
+
+<!-- ===== PREVIEW ===== -->
+<div id="preview"></div>
+
+<script>
+const PRICES = [
+  ["Агератум (Морска пяна) ф9", 0.41],
+  ["Алисум ф9", 0.46],
+  ["Алпийски сакъз ф10.5", 1.55],
+  ["Бегония (бордюрна) ф9", 0.41],
+  ["Биденс ф10", 1.00],
+  ["Вербена (бордюрна) ф9", 0.41],
+  ["Вербена (каскадна) ф10.5", 1.00],
+  ["Газания ф9", 0.52],
+  ["Далия ф10.5", 1.55],
+  ["Дихондра ф10.5", 1.28],
+  ["Домат", 0.40],
+  ["Импатиенс (циганче) ф9", 0.41],
+  ["Ипомеа Батата ф10.5", 1.28],
+  ["Калибрахое ф10.5", 1.00],
+  ["Калоцефалус ф10.5", 1.55],
+  ["Канна ф12", 1.80],
+  ["Карамфил ф10.5", 1.55],
+  ["Каскадно калдъръмче (Портулака каскадна)", 1.53],
+  ["Катарантус (Винка) ф9", 0.46],
+  ["Катарантус (Каскадна Винка) ф9", 1.00],
+  ["Колеус (Копривка) ф9", 0.41],
+  ["Кошница с микс цветя", 6.50],
+  ["Лавандула ф10.5", 1.55],
+  ["Лобелия ф9", 0.66],
+  ["Мимулус ф9", 0.41],
+  ["Нова Гвинея ф12", 1.28],
+  ["Нова Гвинея (Сънпатиенс) ф12", 1.44],
+  ["Остеоспермум ф10.5", 1.28],
+  ["Патладжан", 0.40],
+  ["Пеларгониум зонале (мушкато) ф12", 1.55],
+  ["Пеларгониум зонале Калиопе (мушкато - каскадно) ф12", 2.00],
+  ["Пеларгониум зонале Селектирани сортове ф12", 2.00],
+  ["Пеларгониум пелтатум (Сакъз) ф10.5", 1.55],
+  ["Пентас ф9", 0.93],
+  ["Петуния (бордюрна) ф9", 0.41],
+  ["Петуния (каскадна) ф10.5", 1.00],
+  ["Петуния (Сурфина - каскадна) ф10.5", 1.03],
+  ["Пипер", 0.40],
+  ["Портулака (калдъръмче) ф9", 0.41],
+  ["Ранункулос", 0.77],
+  ["Салвия ф9", 0.41],
+  ["Санвиталия ф10.5", 1.03],
+  ["Тагетис ф9", 0.46],
+  ["Тиква", 0.40],
+  ["Целозия", 0.43],
+  ["Цинерария ф9", 0.77],
+  ["Циния ф9", 0.77],
+];
+
+// Set today's date
+const d = new Date();
+document.getElementById('docdate').value =
+  String(d.getDate()).padStart(2,'0') + '.' +
+  String(d.getMonth()+1).padStart(2,'0') + '.' +
+  d.getFullYear();
+
+let selected = {}; // name -> qty
+
+function fmt(n) { return n.toFixed(2); }
+
+function filterDropdown() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const dd = document.getElementById('dropdown');
+  if (!q) { dd.style.display = 'none'; return; }
+  const matches = PRICES.filter(([name]) => name.toLowerCase().includes(q) && !selected[name]);
+  if (!matches.length) { dd.style.display = 'none'; return; }
+  dd.innerHTML = matches.slice(0,10).map(([name, price]) =>
+    `<div class="drop-item" onclick="addItem('${name.replace(/'/g,"\\'")}')">
+      <span>${name}</span><span class="drop-price">${fmt(price)} EUR</span>
+    </div>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap')) document.getElementById('dropdown').style.display = 'none';
+});
+
+function addItem(name) {
+  selected[name] = '';
+  document.getElementById('search').value = '';
+  document.getElementById('dropdown').style.display = 'none';
+  renderItems();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.qty');
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function removeItem(name) {
+  delete selected[name];
+  renderItems();
+}
+
+function updateQty(name, val) {
+  selected[name] = val;
+  renderItems(false);
+}
+
+function renderItems(refocus=true) {
+  const tbody = document.getElementById('items-body');
+  const names = Object.keys(selected);
+  document.getElementById('items-section').style.display = names.length ? '' : 'none';
+
+  tbody.innerHTML = names.map((name) => {
+    const price = PRICES.find(([n]) => n === name)[1];
+    const qty = parseInt(selected[name]) || 0;
+    const sum = qty * price;
+    return `<tr>
+      <td>${name}</td>
+      <td style="text-align:center;color:#7dc820">${fmt(price)}</td>
+      <td style="text-align:center">
+        <input class="qty" type="number" min="1" value="${selected[name]}"
+          placeholder="0"
+          oninput="updateQty('${name.replace(/'/g,"\\'")}', this.value)"
+          onchange="updateQty('${name.replace(/'/g,"\\'")}', this.value)">
+      </td>
+      <td style="text-align:right;color:${qty>0?'#f5e800':'#666'}">${qty>0?fmt(sum):'—'}</td>
+      <td style="text-align:center"><button class="remove-btn" onclick="removeItem('${name.replace(/'/g,"\\'")}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const totalQty = names.reduce((s,n) => s + (parseInt(selected[n])||0), 0);
+  const totalSum = names.reduce((s,n) => {
+    const price = PRICES.find(([p]) => p === n)[1];
+    return s + (parseInt(selected[n])||0) * price;
+  }, 0);
+
+  document.getElementById('total-info').textContent = `Общо артикули: ${names.filter(n=>parseInt(selected[n])>0).length}  |  Бройки: ${totalQty}`;
+  document.getElementById('total-sum-display').textContent = fmt(totalSum) + ' EUR';
+
+  const btn = document.getElementById('gen-btn');
+  const client = document.getElementById('client').value.trim();
+  const address = document.getElementById('address').value.trim();
+  btn.disabled = !client || !address || !names.length || names.every(n=>!parseInt(selected[n]));
+}
+
+document.getElementById('client').addEventListener('input', () => renderItems(false));
+document.getElementById('address').addEventListener('input', () => renderItems(false));
+
+function generatePreview() {
+  const client  = document.getElementById('client').value.trim();
+  const address = document.getElementById('address').value.trim();
+  const date    = document.getElementById('docdate').value.trim();
+
+  const entries = Object.entries(selected).map(([name, qty]) => {
+    const price = PRICES.find(([n]) => n === name)[1];
+    const q = parseInt(qty) || 0;
+    return { name, qty: q, price, sum: q * price };
+  }).filter(e => e.qty > 0);
+
+  const totalQty = entries.reduce((s,e) => s+e.qty, 0);
+  const totalSum = entries.reduce((s,e) => s+e.sum, 0);
+
+  const rows = entries.map((e, i) => `
+    <tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${e.name}</td>
+      <td style="text-align:center">${e.qty}</td>
+      <td style="text-align:right">${fmt(e.price)}</td>
+      <td style="text-align:right">${fmt(e.sum)}</td>
+    </tr>`).join('');
+
+  document.getElementById('preview').innerHTML = `
+    <div class="doc-logo">
+      <div style="font-family:Arial Black,Arial,sans-serif;font-size:28px;font-weight:900;line-height:1">
+        <span style="color:#f5e800">Zelenko</span><span style="color:#5a9e1a;font-size:16px"> greenhouse</span>
+      </div>
+    </div>
+    <div class="doc-title">ПРИЕМНО-ПРЕДАВАТЕЛЕН ПРОТОКОЛ</div>
+    <div class="doc-sub">за продажба на цветя и декоративни растения</div>
+
+    <table>
+      <tr><td style="width:56%"><b>Предава: БИЗНЕС ГРУП-11 ЕООД</b></td><td><b>Дата: ${date}</b></td></tr>
+      <tr><td>гр. Павликени, ул. Христо Смирненски 24</td><td>Тип клиент: Частен клиент</td></tr>
+      <tr><td>МОЛ: Радослав Христов &nbsp;|&nbsp; ЕИК: BG201561045</td><td>Получава: ${client}</td></tr>
+      <tr><td></td><td>Адрес: ${address}</td></tr>
+    </table>
+
+    <table>
+      <thead><tr>
+        <th style="width:5%">№</th>
+        <th>Артикул</th>
+        <th style="width:9%">Бр.</th>
+        <th style="width:17%">Ед. цена (EUR)</th>
+        <th style="width:17%">Сума (EUR)</th>
+      </tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="total-bg">
+          <td colspan="2"><b>ОБЩО:</b></td>
+          <td style="text-align:center"><b>${totalQty}</b></td>
+          <td></td>
+          <td style="text-align:right"><b>${fmt(totalSum)}</b></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="remark-box"><div class="remark-label">Забележки:</div></div>
+
+    <table>
+      <tr><td style="width:50%"><b>Предал:</b></td><td><b>Получил:</b></td></tr>
+      <tr><td style="text-align:center;padding-bottom:22px">(подпис и печат)</td><td style="text-align:center;padding-bottom:22px">(подпис)</td></tr>
+    </table>
+
+    <div class="summary">Обща сума: ${fmt(totalSum)} EUR</div>
+
+    <div class="btn-row no-print">
+      <button class="btn-back" onclick="goBack()">← Назад</button>
+      <button class="btn-print" onclick="window.print()">🖨 Принтирай / Запази PDF</button>
+    </div>
+  `;
+
+  document.getElementById('app-form').style.display = 'none';
+  document.getElementById('preview').style.display = 'block';
+}
+
+function goBack() {
+  document.getElementById('app-form').style.display = 'block';
+  document.getElementById('preview').style.display = 'none';
+}
+</script>
+</body>
+</html>
