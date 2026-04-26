@@ -464,7 +464,8 @@ if(sessionStorage.getItem('za')==='1'){
 }
 
 // ── VOICE INPUT WITH AI ──────────────────────────────────
-let recognition = null;
+let mediaRecorder = null;
+let audioChunks = [];
 let isListening = false;
 
 function toggleVoice(){
@@ -472,54 +473,143 @@ function toggleVoice(){
   else startVoice();
 }
 
-function startVoice(){
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SpeechRecognition){
-    document.getElementById('voice-status').textContent='❌ Браузърът не поддържа гласово въвеждане. Използвай Safari на iPhone.';
-    return;
-  }
-  recognition = new SpeechRecognition();
-  recognition.lang = 'bg-BG';
-  recognition.continuous = false;
-  recognition.interimResults = true;
+async function startVoice(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
 
-  recognition.onstart = () => {
+    mediaRecorder.ondataavailable = e => {
+      if(e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(audioChunks, {type: 'audio/webm'});
+      await transcribeAndParse(blob);
+    };
+
+    mediaRecorder.start();
     isListening = true;
     document.getElementById('mic-btn').style.background = '#cc2222';
     document.getElementById('mic-btn').textContent = '⏹';
-    document.getElementById('voice-status').textContent = '🎙 Слушам... говори сега';
+    document.getElementById('voice-status').textContent = '🎙 Записвам... натисни ⏹ за спиране';
     document.getElementById('voice-transcript').textContent = '';
     document.getElementById('voice-result').textContent = '';
-  };
 
-  recognition.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r=>r[0].transcript).join(' ');
-    document.getElementById('voice-transcript').textContent = '"' + transcript + '"';
-    if(e.results[e.results.length-1].isFinal){
-      stopVoice();
-      parseWithAI(transcript);
-    }
-  };
+    // Auto stop after 10 seconds
+    setTimeout(() => { if(isListening) stopVoice(); }, 10000);
 
-  recognition.onerror = (e) => {
-    stopVoice();
-    document.getElementById('voice-status').textContent = '❌ Грешка: ' + e.error;
-  };
-
-  recognition.onend = () => stopVoice();
-  recognition.start();
+  } catch(e) {
+    document.getElementById('voice-status').textContent = '❌ Няма достъп до микрофон: ' + e.message;
+  }
 }
 
 function stopVoice(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   isListening = false;
-  if(recognition) recognition.stop();
   document.getElementById('mic-btn').style.background = '#1a5a2a';
   document.getElementById('mic-btn').textContent = '🎤';
-  document.getElementById('voice-status').textContent = '';
+  document.getElementById('voice-status').textContent = '⏳ Обработвам...';
 }
 
-async function parseWithAI(text){
+async function transcribeAndParse(blob){
+  // Convert to base64
+  const reader = new FileReader();
+  reader.onloadend = async () => {
+    const base64 = reader.result.split(',')[1];
+    await parseWithAI(base64, blob.type);
+  };
+  reader.readAsDataURL(blob);
+}
+
+async function parseWithAI(base64Audio, mimeType){
+  const allItems = getAllItems();
+  const itemList = allItems.map(([k,n,p])=>`"${k}" (${n})`).join(', ');
+  const clients = lc().map(c=>c.n).join(', ');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        messages:[{role:'user', content:[
+          {type:'text', text:`Слушай аудиото и разпознай клиент и артикули.
+
+Налични клиенти: ${clients}
+Налични артикули: ${itemList}
+
+Върни САМО JSON:
+{"client": "име_или_null", "transcript": "чут текст", "items": [{"key": "кратко_име", "qty": число}]}
+
+Само JSON, нищо друго.`},
+          {type:'document', source:{type:'base64', media_type: mimeType || 'audio/webm', data: base64Audio}}
+        ]}]
+      })
+    });
+
+    const data = await res.json();
+
+    // Fallback - if audio not supported, use text input
+    if(data.error){
+      document.getElementById('voice-status').textContent = '';
+      document.getElementById('voice-result').textContent = '⚠️ Моля въведи текстово: "Марин мушкато 100"';
+      showTextInput();
+      return;
+    }
+
+    const txt = data.content[0].text.trim();
+    const json = JSON.parse(txt.replace(/```json|```/g,'').trim());
+
+    if(json.transcript){
+      document.getElementById('voice-transcript').textContent = '"' + json.transcript + '"';
+    }
+
+    let filled = 0;
+    if(json.client){
+      const match = lc().find(c=>c.n.toLowerCase()===json.client.toLowerCase());
+      if(match){
+        document.getElementById('client').value = match.n;
+        document.getElementById('address').value = match.a;
+        document.querySelectorAll('.cbtn').forEach(b=>{
+          b.classList.toggle('active', b.textContent.startsWith(match.n));
+        });
+      }
+    }
+    if(json.items){
+      json.items.forEach(({key, qty})=>{
+        const inp = document.getElementById('qty_'+key);
+        if(inp && qty > 0){ inp.value = qty; inp.dispatchEvent(new Event('input')); filled++; }
+      });
+    }
+    updateSummary();
+    document.getElementById('voice-status').textContent = '';
+    document.getElementById('voice-result').textContent = filled > 0
+      ? `✅ Попълнени ${filled} артикула${json.client?' за '+json.client:''}`
+      : '⚠️ Не разпознах артикули — опитай пак';
+
+  } catch(e) {
+    // Fallback to text input
+    document.getElementById('voice-status').textContent = '';
+    showTextInput();
+  }
+}
+
+function showTextInput(){
+  document.getElementById('voice-transcript').innerHTML =
+    `<input type="text" id="voice-text-inp" placeholder='Напр: "Марин мушкато 100 сакъз 50"'
+     style="width:100%;background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:7px 10px;font-size:13px;outline:none;margin-top:4px">
+     <button onclick="parseText()" style="margin-top:6px;background:#4a7c20;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;width:100%">✅ Потвърди</button>`;
+}
+
+async function parseText(){
+  const text = document.getElementById('voice-text-inp')?.value?.trim();
+  if(!text) return;
   document.getElementById('voice-status').textContent = '🤖 AI анализира...';
+  document.getElementById('voice-transcript').textContent = '"' + text + '"';
+
   const allItems = getAllItems();
   const itemList = allItems.map(([k,n,p])=>`"${k}" (${n})`).join(', ');
   const clients = lc().map(c=>c.n).join(', ');
@@ -531,70 +621,32 @@ async function parseWithAI(text){
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 500,
-        messages:[{role:'user', content:`
-Разпознай клиент и артикули от следния текст на български: "${text}"
-
-Налични клиенти: ${clients}
-
-Налични артикули (кратко_име): ${itemList}
-
-Върни САМО валиден JSON без коментари:
-{
-  "client": "разпознато_име_или_null",
-  "items": [
-    {"key": "кратко_име", "qty": число}
-  ]
-}
-
-Правила:
-- Съпостави артикулите по смисъл (мушкато = мушкато, сакъз = сакъз и т.н.)
-- Числото след артикула е количеството
-- Ако не разпознаеш артикул, пропусни го
-- Върни само JSON, нищо друго
-        `}]
+        messages:[{role:'user', content:`Разпознай клиент и артикули от: "${text}"
+Клиенти: ${clients}
+Артикули: ${itemList}
+Върни САМО JSON: {"client":"или_null","items":[{"key":"кратко","qty":число}]}`}]
       })
     });
-
     const data = await res.json();
-    const txt = data.content[0].text.trim();
-    const json = JSON.parse(txt.replace(/```json|```/g,'').trim());
-
+    const json = JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
     let filled = 0;
-
-    // Set client
     if(json.client){
       const match = lc().find(c=>c.n.toLowerCase()===json.client.toLowerCase());
       if(match){
-        document.getElementById('client').value = match.n;
-        document.getElementById('address').value = match.a;
-        document.querySelectorAll('.cbtn').forEach(b=>{
-          b.classList.toggle('active', b.textContent.startsWith(match.n));
-        });
+        document.getElementById('client').value=match.n;
+        document.getElementById('address').value=match.a;
+        document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('active',b.textContent.startsWith(match.n)));
       }
     }
-
-    // Fill quantities
-    if(json.items && json.items.length){
-      json.items.forEach(({key, qty})=>{
-        const inp = document.getElementById('qty_'+key);
-        if(inp && qty > 0){
-          inp.value = qty;
-          inp.dispatchEvent(new Event('input'));
-          filled++;
-        }
-      });
-    }
-
+    if(json.items) json.items.forEach(({key,qty})=>{
+      const inp=document.getElementById('qty_'+key);
+      if(inp&&qty>0){inp.value=qty;inp.dispatchEvent(new Event('input'));filled++;}
+    });
     updateSummary();
-    document.getElementById('voice-status').textContent = '';
-    document.getElementById('voice-result').textContent =
-      filled > 0
-        ? `✅ Попълнени ${filled} артикула${json.client ? ' за ' + json.client : ''}`
-        : '⚠️ Не разпознах артикули — опитай пак по-ясно';
-
+    document.getElementById('voice-status').textContent='';
+    document.getElementById('voice-result').textContent=filled>0?`✅ Попълнени ${filled} артикула`:'⚠️ Не разпознах артикули';
   } catch(e){
-    document.getElementById('voice-status').textContent = '❌ Грешка при AI анализ';
-    console.error(e);
+    document.getElementById('voice-status').textContent='❌ Грешка при анализ';
   }
 }
 // ─────────────────────────────────────────────────────────
