@@ -125,19 +125,14 @@ input:focus,select:focus,textarea:focus{border-color:#7dc820}
 <div class="lcard">
   <div class="llogo">Zelenko<span> greenhouse</span></div>
   <div class="lsub">Генератор на протоколи</div>
-  <div id="faceid-section">
-    <div style="font-size:14px;color:#aad080;margin-bottom:16px">Влез с Face ID или парола</div>
-    <button class="lbtn" id="faceid-btn" onclick="loginFaceID()" style="background:#1a3a5a;margin-bottom:10px;display:none">
-      🔐 Влез с Face ID / Touch ID
-    </button>
-    <button class="lbtn" id="register-btn" onclick="registerFaceID()" style="background:#1a5a3a;margin-bottom:10px;display:none">
-      ✅ Регистрирай Face ID
-    </button>
-  </div>
-  <div style="font-size:11px;color:#3a5a3a;margin:8px 0">— или —</div>
-  <input class="linp" type="password" inputmode="text" id="pwd-input" placeholder="Парола..." onkeydown="if(event.key==='Enter')checkPwd()">
-  <button class="lbtn" onclick="checkPwd()" style="margin-top:8px">Влез с парола →</button>
+  <button class="lbtn" id="faceid-btn" onclick="loginFaceID()" style="background:#1a3a5a;margin-bottom:12px;display:none;font-size:18px">
+    🔐 Face ID
+  </button>
+  <div style="font-size:11px;color:#3a5a3a;margin-bottom:10px" id="or-text" style="display:none">— или —</div>
+  <input class="linp" type="password" id="pwd-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')checkPwd()">
+  <button class="lbtn" onclick="checkPwd()" style="margin-top:10px">Влез →</button>
   <div class="lerr" id="pwd-err"></div>
+  <div style="font-size:11px;color:#3a5a3a;margin-top:12px;cursor:pointer" onclick="setupFaceID()" id="setup-link">⚙️ Настрой Face ID</div>
 </div>
 </div>
 
@@ -383,62 +378,69 @@ function loginSuccess(){
   init();
 }
 
-// FACE ID / WebAuthn
-const RP_ID = location.hostname;
-const RP_NAME = 'Zelenko PP';
-const USER_ID = new Uint8Array([1,2,3,4,5,6,7,8]);
-
-function b64url(buf){
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-function fromB64url(str){
-  str = str.replace(/-/g,'+').replace(/_/g,'/');
-  return Uint8Array.from(atob(str), c=>c.charCodeAt(0));
-}
-
-async function registerFaceID(){
+// ── FACE ID ──
+async function setupFaceID(){
+  // Must be called after password login
+  const pwd = prompt('Въведи паролата за потвърждение:');
+  if(pwd !== 'c5f5548c'){ alert('❌ Грешна парола'); return; }
   try {
     const cred = await navigator.credentials.create({publicKey:{
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: {id: RP_ID, name: RP_NAME},
-      user: {id: USER_ID, name: 'Радослав', displayName: 'Радослав'},
-      pubKeyCredParams: [{type:'public-key', alg:-7},{type:'public-key', alg:-257}],
-      authenticatorSelection: {authenticatorAttachment:'platform', userVerification:'required'},
+      rp: {id: location.hostname, name: 'Zelenko'},
+      user: {
+        id: new TextEncoder().encode('radoslav'),
+        name: 'radoslav',
+        displayName: 'Радослав'
+      },
+      pubKeyCredParams: [
+        {type:'public-key', alg:-7},
+        {type:'public-key', alg:-257}
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'preferred',
+        requireResidentKey: false
+      },
       timeout: 60000,
     }});
-    localStorage.setItem('z_cred_id', b64url(cred.rawId));
-    document.getElementById('register-btn').style.display='none';
+    const id = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+    localStorage.setItem('zfid', id);
     document.getElementById('faceid-btn').style.display='block';
-    document.getElementById('pwd-err').style.color='#7dc820';
-    document.getElementById('pwd-err').textContent='✅ Face ID регистриран успешно!';
+    document.getElementById('or-text').style.display='block';
+    document.getElementById('setup-link').textContent='✅ Face ID настроен';
+    alert('✅ Face ID настроен успешно!');
   } catch(e){
-    document.getElementById('pwd-err').textContent='❌ Грешка: ' + e.message;
+    alert('❌ ' + e.message);
   }
 }
 
 async function loginFaceID(){
+  const storedId = localStorage.getItem('zfid');
+  if(!storedId){ setupFaceID(); return; }
   try {
-    const credId = localStorage.getItem('z_cred_id');
-    if(!credId){alert('Първо регистрирай Face ID!');return;}
+    const rawId = Uint8Array.from(atob(storedId), c=>c.charCodeAt(0));
     await navigator.credentials.get({publicKey:{
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rpId: RP_ID,
-      allowCredentials: [{type:'public-key', id: fromB64url(credId)}],
-      userVerification: 'required',
+      rpId: location.hostname,
+      allowCredentials: [{type:'public-key', id: rawId}],
+      userVerification: 'preferred',
       timeout: 60000,
     }});
     loginSuccess();
   } catch(e){
-    document.getElementById('pwd-err').textContent='❌ Face ID неуспешен';
+    document.getElementById('pwd-err').textContent = '❌ Face ID неуспешен — използвай паролата';
   }
 }
 
-// Check WebAuthn support and show buttons
+// Show Face ID button if registered
 (async()=>{
-  if(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()){
-    const hasCred = localStorage.getItem('z_cred_id');
-    document.getElementById(hasCred ? 'faceid-btn' : 'register-btn').style.display='block';
+  if(localStorage.getItem('zfid') && window.PublicKeyCredential){
+    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+    if(avail){
+      document.getElementById('faceid-btn').style.display='block';
+      document.getElementById('or-text').style.display='block';
+      document.getElementById('setup-link').textContent='✅ Face ID активен';
+    }
   }
 })();
 
