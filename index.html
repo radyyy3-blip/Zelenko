@@ -166,6 +166,21 @@ input:focus,select:focus,textarea:focus{border-color:#7dc820}
       <textarea id="note" rows="2" placeholder="Бележка към протокола..." style="resize:vertical"></textarea></div>
     </div>
     <div class="sec">🌸 Въведи бройки — Enter за следващ</div>
+
+    <!-- PASTE FROM VIBER -->
+    <div style="background:#0d2a1a;border:1px solid #2a5a3a;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;color:#7dc820;font-weight:bold;margin-bottom:8px">📋 Постави текст от Viber / снимка</div>
+      <textarea id="viber-text" rows="3" placeholder='Постави текст от Viber... напр: "мушкато 100, сакъз 50, тагетис 80"' style="width:100%;background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:8px;font-size:13px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
+      <div style="display:flex;gap:8px">
+        <button onclick="parseViberText()" style="flex:1;background:#4a7c20;color:#fff;border:none;border-radius:6px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer">🤖 AI Разпознай</button>
+        <label style="flex:0 0 auto;background:#1a3a5a;color:#aacce8;border:none;border-radius:6px;padding:9px 14px;font-size:13px;font-weight:bold;cursor:pointer">
+          📷 Снимка
+          <input type="file" accept="image/*" onchange="parseImage(this)" style="display:none">
+        </label>
+      </div>
+      <div id="viber-status" style="font-size:12px;color:#7dc820;margin-top:8px;min-height:16px"></div>
+    </div>
+
     <div id="groups"></div>
     <div class="summary">
       <div class="sinfo" id="sinfo">Все още няма въведени бройки</div>
@@ -452,7 +467,78 @@ if(sessionStorage.getItem('za')==='1'){
   init();
 }
 
-// ── VOICE INPUT WITH AI ──────────────────────────────────
+// ── VIBER TEXT & IMAGE PARSING ──
+async function parseViberText(){
+  const text = document.getElementById('viber-text').value.trim();
+  if(!text){ document.getElementById('viber-status').textContent='⚠️ Постави текст първо'; return; }
+  document.getElementById('viber-status').textContent='🤖 AI анализира...';
+  await callAI(text, null);
+}
+
+async function parseImage(input){
+  const file = input.files[0];
+  if(!file) return;
+  document.getElementById('viber-status').textContent='🤖 Анализирам снимката...';
+  const reader = new FileReader();
+  reader.onloadend = async () => {
+    const base64 = reader.result.split(',')[1];
+    const mimeType = file.type;
+    await callAI(null, {base64, mimeType});
+  };
+  reader.readAsDataURL(file);
+}
+
+async function callAI(text, image){
+  const allItems = getAllItems();
+  const itemList = allItems.map(([k,n,p])=>`"${k}" (${n})`).join(', ');
+  const clients = lc().map(c=>c.n).join(', ');
+
+  const prompt = `Разпознай клиент и артикули${image?' от снимката':' от текста'}.
+${text ? `Текст: "${text}"` : ''}
+Налични клиенти: ${clients}
+Налични артикули: ${itemList}
+Върни САМО JSON: {"client":"или_null","items":[{"key":"кратко","qty":число}]}
+Правила: съпостави по смисъл, числото след артикула е количеството, само JSON.`;
+
+  try {
+    const msgContent = image
+      ? [{type:'image',source:{type:'base64',media_type:image.mimeType,data:image.base64}},{type:'text',text:prompt}]
+      : prompt;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:500,
+        messages:[{role:'user',content:msgContent}]
+      })
+    });
+    const data = await res.json();
+    const json = JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
+
+    let filled = 0;
+    if(json.client){
+      const match = lc().find(c=>c.n.toLowerCase()===json.client.toLowerCase());
+      if(match){
+        document.getElementById('client').value=match.n;
+        document.getElementById('address').value=match.a;
+        document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('active',b.textContent.startsWith(match.n)));
+      }
+    }
+    if(json.items) json.items.forEach(({key,qty})=>{
+      const inp=document.getElementById('qty_'+key);
+      if(inp&&qty>0){inp.value=qty;inp.dispatchEvent(new Event('input'));filled++;}
+    });
+    updateSummary();
+    document.getElementById('viber-status').textContent = filled>0
+      ? `✅ Попълнени ${filled} артикула${json.client?' за '+json.client:''}`
+      : '⚠️ Не разпознах артикули — провери текста';
+  } catch(e){
+    document.getElementById('viber-status').textContent='❌ Грешка при анализ';
+  }
+}
+// ─────────────────────────────────────────────────────────
 let mediaRecorder = null;
 let audioChunks = [];
 let isListening = false;
