@@ -471,72 +471,63 @@ if(sessionStorage.getItem('za')==='1'){
 async function parseViberText(){
   const text = document.getElementById('viber-text').value.trim();
   if(!text){ document.getElementById('viber-status').textContent='⚠️ Постави текст първо'; return; }
-  document.getElementById('viber-status').textContent='🤖 AI анализира...';
-  await callAI(text, null);
+  document.getElementById('viber-status').textContent='🔍 Разпознавам...';
+  parseLocally(text);
+}
+
+function parseLocally(text){
+  const allItems = getAllItems();
+  const clients = lc();
+  const lower = text.toLowerCase();
+  let filled = 0;
+
+  // Detect client
+  clients.forEach(c=>{
+    if(lower.includes(c.n.toLowerCase())){
+      document.getElementById('client').value=c.n;
+      document.getElementById('address').value=c.a;
+      document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('active',b.textContent.startsWith(c.n)));
+    }
+  });
+
+  // Number patterns - find qty next to item name
+  // Common patterns: "мушкато 100", "100 мушкато", "мушкато-100", "мушкато: 100"
+  allItems.forEach(([key, name])=>{
+    const keyLower = key.toLowerCase();
+    const nameLower = name.toLowerCase();
+
+    // Try to find the item in text
+    const patterns = [keyLower, nameLower.split(' ')[0], nameLower.split('(')[0].trim()];
+
+    for(const pat of patterns){
+      if(pat.length < 3) continue;
+      const idx = lower.indexOf(pat);
+      if(idx === -1) continue;
+
+      // Look for number near the match (within 20 chars before or after)
+      const surrounding = lower.substring(Math.max(0,idx-15), idx+pat.length+15);
+      const numMatch = surrounding.match(/(\d+)/);
+      if(numMatch){
+        const qty = parseInt(numMatch[1]);
+        if(qty > 0 && qty < 10000){
+          const inp = document.getElementById('qty_'+key);
+          if(inp){ inp.value=qty; inp.dispatchEvent(new Event('input')); filled++; }
+          break;
+        }
+      }
+    }
+  });
+
+  updateSummary();
+  document.getElementById('viber-status').textContent = filled>0
+    ? `✅ Попълнени ${filled} артикула`
+    : '⚠️ Не разпознах артикули — провери текста';
 }
 
 async function parseImage(input){
   const file = input.files[0];
   if(!file) return;
-  document.getElementById('viber-status').textContent='🤖 Анализирам снимката...';
-  const reader = new FileReader();
-  reader.onloadend = async () => {
-    const base64 = reader.result.split(',')[1];
-    const mimeType = file.type;
-    await callAI(null, {base64, mimeType});
-  };
-  reader.readAsDataURL(file);
-}
-
-async function callAI(text, image){
-  const allItems = getAllItems();
-  const itemList = allItems.map(([k,n,p])=>`"${k}" (${n})`).join(', ');
-  const clients = lc().map(c=>c.n).join(', ');
-
-  const prompt = `Разпознай клиент и артикули${image?' от снимката':' от текста'}.
-${text ? `Текст: "${text}"` : ''}
-Налични клиенти: ${clients}
-Налични артикули: ${itemList}
-Върни САМО JSON: {"client":"или_null","items":[{"key":"кратко","qty":число}]}
-Правила: съпостави по смисъл, числото след артикула е количеството, само JSON.`;
-
-  try {
-    const msgContent = image
-      ? [{type:'image',source:{type:'base64',media_type:image.mimeType,data:image.base64}},{type:'text',text:prompt}]
-      : prompt;
-
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:500,
-        messages:[{role:'user',content:msgContent}]
-      })
-    });
-    const data = await res.json();
-    const json = JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
-
-    let filled = 0;
-    if(json.client){
-      const match = lc().find(c=>c.n.toLowerCase()===json.client.toLowerCase());
-      if(match){
-        document.getElementById('client').value=match.n;
-        document.getElementById('address').value=match.a;
-        document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('active',b.textContent.startsWith(match.n)));
-      }
-    }
-    if(json.items) json.items.forEach(({key,qty})=>{
-      const inp=document.getElementById('qty_'+key);
-      if(inp&&qty>0){inp.value=qty;inp.dispatchEvent(new Event('input'));filled++;}
-    });
-    updateSummary();
-    document.getElementById('viber-status').textContent = filled>0
-      ? `✅ Попълнени ${filled} артикула${json.client?' за '+json.client:''}`
-      : '⚠️ Не разпознах артикули — провери текста';
-  } catch(e){
-    document.getElementById('viber-status').textContent='❌ Грешка при анализ';
-  }
+  document.getElementById('viber-status').textContent='📷 Снимката е качена — въведи текста ръчно или използвай текстовото поле';
 }
 // ─────────────────────────────────────────────────────────
 let mediaRecorder = null;
@@ -822,6 +813,8 @@ function buildPreviewHTML(r){
     <div class="final">Обща сума: ${fmt(r.ts)} EUR</div>`;
 }
 
+let _currentRecord = null;
+
 function generate(){
   const client=document.getElementById('client').value.trim();
   const address=document.getElementById('address').value.trim();
@@ -830,26 +823,51 @@ function generate(){
   const entries=getAllItems().map(([k,n,p])=>{const el=document.getElementById('qty_'+k);return{k,n,p,q:el?parseInt(el.value)||0:0}}).filter(e=>e.q>0);
   const tq=entries.reduce((a,e)=>a+e.q,0),ts=entries.reduce((a,e)=>a+e.q*e.p,0);
   const record={client,address,date,note,entries,tq,ts};
+  _currentRecord = record;
   document.getElementById('preview').innerHTML=buildPreviewHTML(record)+
     `<div class="btnrow noprint">
-      <button class="btnback" onclick="showMain()">← Назад</button>
-      <button class="btnsave" onclick='saveRec(${JSON.stringify(record).replace(/\\/g,"\\\\").replace(/'/g,"&#39;")})'>💾 Запази</button>
-      <button class="btnshare" onclick='shareRec(${JSON.stringify(record).replace(/\\/g,"\\\\").replace(/'/g,"&#39;")})'>📤 Сподели</button>
+      <button class="btnback" onclick="newProtocol()">🆕 Нов протокол</button>
+      <button class="btnsave" onclick="saveRec()">💾 Запази</button>
+      <button class="btnshare" onclick="shareRec()">📤 Сподели</button>
       <button class="btnprint" onclick="window.print()">🖨 Принтирай / PDF</button>
     </div>`;
   document.getElementById('main-screen').style.display='none';
   document.getElementById('preview').style.display='block';
 }
 
-function saveRec(r){
-  const h=lh();h.unshift({...r,id:Date.now(),paid:false});sh(h);
-  alert('✅ Запазено!');
+function saveRec(){
+  if(!_currentRecord){ alert('❌ Няма протокол за запазване'); return; }
+  const h=lh();
+  h.unshift({..._currentRecord, id:Date.now(), paid:false});
+  sh(h);
+  alert('✅ Запазено в историята!');
 }
 
-function shareRec(r){
+function shareRec(){
+  if(!_currentRecord) return;
+  const r=_currentRecord;
   const txt=`ПРОТОКОЛ Зеленко\nКлиент: ${r.client} (${r.address})\nДата: ${r.date}\n${r.entries.map(e=>`${e.n}: ${e.q} бр. x ${fmt(e.p)} = ${fmt(e.q*e.p)} EUR`).join('\n')}\nОБЩО: ${fmt(r.ts)} EUR${r.note?'\nЗабележка: '+r.note:''}`;
   if(navigator.share){navigator.share({title:'Протокол Зеленко',text:txt}).catch(()=>{})}
   else{navigator.clipboard.writeText(txt).then(()=>alert('📋 Копирано! Постави в Viber.')).catch(()=>{prompt('Копирай ръчно:',txt)})}
+}
+
+function newProtocol(){
+  // Clear all quantities
+  getAllItems().forEach(([key])=>{
+    const inp=document.getElementById('qty_'+key);
+    if(inp){ inp.value=''; inp.dispatchEvent(new Event('input')); }
+  });
+  // Clear client fields
+  document.getElementById('client').value='';
+  document.getElementById('address').value='';
+  document.getElementById('note').value='';
+  document.getElementById('docdate').value=today();
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viber-text').value='';
+  document.getElementById('viber-status').textContent='';
+  _currentRecord=null;
+  showMain();
+  updateSummary();
 }
 
 function showMain(){
