@@ -167,7 +167,7 @@ input:focus,select:focus,textarea:focus{border-color:#7dc820}
     </div>
     <div class="sec">🌸 Въведи бройки — Enter за следващ</div>
     <div style="margin-bottom:10px;position:relative">
-      <input type="search" id="item-search" placeholder="🔍 Търси артикул..." style="width:100%;background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box">
+      <input type="search" id="item-search" placeholder="🔍 Търси артикул..." onkeyup="filterItems()" oninput="filterItems()" onchange="filterItems()" style="width:100%;background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box">
     </div>
 
     <!-- PASTE FROM VIBER -->
