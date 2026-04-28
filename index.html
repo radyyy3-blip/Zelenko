@@ -172,15 +172,9 @@ input:focus,select:focus,textarea:focus{border-color:#7dc820}
 
     <!-- PASTE FROM VIBER -->
     <div style="background:#0d2a1a;border:1px solid #2a5a3a;border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:12px;color:#7dc820;font-weight:bold;margin-bottom:8px">📋 Постави текст от Viber / снимка</div>
+      <div style="font-size:12px;color:#7dc820;font-weight:bold;margin-bottom:8px">📋 Постави текст от Viber</div>
       <textarea id="viber-text" rows="3" placeholder='Постави текст от Viber... напр: "мушкато 100, сакъз 50, тагетис 80"' style="width:100%;background:#0a160a;border:1px solid #3a6a2a;border-radius:6px;color:#e8f0e8;padding:8px;font-size:13px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-      <div style="display:flex;gap:8px">
-        <button onclick="parseViberText()" style="flex:1;background:#4a7c20;color:#fff;border:none;border-radius:6px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer">🤖 AI Разпознай</button>
-        <label style="flex:0 0 auto;background:#1a3a5a;color:#aacce8;border:none;border-radius:6px;padding:9px 14px;font-size:13px;font-weight:bold;cursor:pointer">
-          📷 Снимка
-          <input type="file" accept="image/*" onchange="parseImage(this)" style="display:none">
-        </label>
-      </div>
+      <button onclick="parseViberText()" style="width:100%;background:#4a7c20;color:#fff;border:none;border-radius:6px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer">✅ Разпознай</button>
       <div id="viber-status" style="font-size:12px;color:#7dc820;margin-top:8px;min-height:16px"></div>
     </div>
 
@@ -824,25 +818,24 @@ function buildPreviewHTML(r){
 function filterItems(){
   const q = (document.getElementById('item-search')?.value||'').toLowerCase().trim();
   if(!q){
-    // Show all groups
-    document.querySelectorAll('.group').forEach(g=>g.style.display='');
-    document.querySelectorAll('.item').forEach(el=>el.style.display='');
+    document.querySelectorAll('#groups .group').forEach(g=>g.style.display='');
+    document.querySelectorAll('#groups .item').forEach(el=>el.style.display='flex');
     return;
   }
-  // Hide/show individual items
-  document.querySelectorAll('.group').forEach(g=>{
+  document.querySelectorAll('#groups .group').forEach(g=>{
     let anyVisible = false;
     g.querySelectorAll('.item').forEach(el=>{
-      const name = el.querySelector('.iname')?.textContent?.toLowerCase()||'';
-      const show = name.includes(q);
-      el.style.display = show ? '' : 'none';
+      const iname = (el.querySelector('.iname')?.textContent||'').toLowerCase();
+      const iprice = (el.querySelector('.iprice')?.textContent||'').toLowerCase();
+      const show = iname.includes(q) || iprice.includes(q);
+      el.style.display = show ? 'flex' : 'none';
       if(show) anyVisible = true;
     });
     g.style.display = anyVisible ? '' : 'none';
   });
 }
 
-let _currentRecord = null;
+window._currentRecord = null;
 
 function generate(){
   const client=document.getElementById('client').value.trim();
@@ -852,7 +845,9 @@ function generate(){
   const entries=getAllItems().map(([k,n,p])=>{const el=document.getElementById('qty_'+k);return{k,n,p,q:el?parseInt(el.value)||0:0}}).filter(e=>e.q>0);
   const tq=entries.reduce((a,e)=>a+e.q,0),ts=entries.reduce((a,e)=>a+e.q*e.p,0);
   const record={client,address,date,note,entries,tq,ts};
-  _currentRecord = record;
+  window._currentRecord = record;
+  // Also save to sessionStorage as backup
+  sessionStorage.setItem('_lastRecord', JSON.stringify(record));
   document.getElementById('preview').innerHTML=buildPreviewHTML(record)+
     `<div class="btnrow noprint">
       <button class="btnback" onclick="newProtocol()">🆕 Нов протокол</button>
@@ -865,11 +860,18 @@ function generate(){
 }
 
 function saveRec(){
-  if(!_currentRecord){ alert('❌ Няма протокол за запазване'); return; }
+  const r = window._currentRecord || JSON.parse(sessionStorage.getItem('_lastRecord')||'null');
+  if(!r){ alert('❌ Няма протокол за запазване'); return; }
   const h=lh();
-  h.unshift({..._currentRecord, id:Date.now(), paid:false});
+  // Check if already saved
+  if(h.length && h[0].client===r.client && h[0].date===r.date && h[0].ts===r.ts){
+    if(!confirm('Протоколът вече е запазен. Запази пак?')) return;
+  }
+  h.unshift({...r, id:Date.now(), paid:false});
   sh(h);
-  alert('✅ Запазено в историята!');
+  // Visual feedback
+  const btn = document.querySelector('.btnsave');
+  if(btn){ btn.textContent='✅ Запазено!'; btn.style.background='#1a5a1a'; setTimeout(()=>{btn.textContent='💾 Запази';btn.style.background='#1a5a8a';},2000); }
 }
 
 function shareRec(){
