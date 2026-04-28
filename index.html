@@ -362,6 +362,7 @@ function showItems(){
       </div>
     </div>`).join('');
 }
+function lh(){return JSON.parse(localStorage.getItem('zh')||'[]')}
 function sh(h){localStorage.setItem('zh',JSON.stringify(h))}
 function lc(){const c=JSON.parse(localStorage.getItem('zc')||'null');return c||DEFAULT_CLIENTS}
 function sc(c){localStorage.setItem('zc',JSON.stringify(c))}
@@ -723,13 +724,13 @@ function init(){
   buildClientBtns();
   buildGroups();
   buildStock();
-  // Search listener
-  const srch = document.getElementById('item-search');
-  if(srch){
-    srch.addEventListener('input', filterItems);
-    srch.addEventListener('keyup', filterItems);
-    srch.addEventListener('search', filterItems);
-  }
+  // Wire search - all events for Safari compatibility
+  setTimeout(()=>{
+    const srch=document.getElementById('item-search');
+    if(srch){
+      ['input','keyup','change','search'].forEach(ev=>srch.addEventListener(ev,filterItems));
+    }
+  },100);
 }
 
 // TABS
@@ -823,22 +824,23 @@ function buildPreviewHTML(r){
 }
 
 function filterItems(){
-  const q = (document.getElementById('item-search')?.value||'').toLowerCase().trim();
+  const srch = document.getElementById('item-search');
+  const q = srch ? srch.value.toLowerCase().trim() : '';
+  const allGroups = document.querySelectorAll('#groups .group');
+  const allItems = document.querySelectorAll('#groups .item');
   if(!q){
-    document.querySelectorAll('#groups .group').forEach(g=>g.style.display='');
-    document.querySelectorAll('#groups .item').forEach(el=>el.style.display='flex');
+    allGroups.forEach(g=>g.style.display='');
+    allItems.forEach(el=>el.style.display='flex');
     return;
   }
-  document.querySelectorAll('#groups .group').forEach(g=>{
-    let anyVisible = false;
+  allGroups.forEach(g=>{
+    let found=false;
     g.querySelectorAll('.item').forEach(el=>{
-      const iname = (el.querySelector('.iname')?.textContent||'').toLowerCase();
-      const iprice = (el.querySelector('.iprice')?.textContent||'').toLowerCase();
-      const show = iname.includes(q) || iprice.includes(q);
-      el.style.display = show ? 'flex' : 'none';
-      if(show) anyVisible = true;
+      const txt=(el.textContent||'').toLowerCase();
+      if(txt.includes(q)){el.style.display='flex';found=true;}
+      else{el.style.display='none';}
     });
-    g.style.display = anyVisible ? '' : 'none';
+    g.style.display=found?'':'none';
   });
 }
 
